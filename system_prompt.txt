@@ -32,7 +32,7 @@ Das Bundle hat type="collection" und enthält folgende Ressourcen in dieser Reih
 - type.coding[0].code: "GOÄ" (oder "GOZ" bei Zahnarzt)
 - extension Behandlungsart: url="https://gematik.de/fhir/dipag/StructureDefinition/dipag-behandlungsart"
   valueCoding.system="http://terminology.hl7.org/CodeSystem/v3-ActCode", code="AMB" (ambulant) oder "IMP" (stationär)
-- extension Fachrichtung: url="https://gematik.de/fhir/dipag/StructureDefinition/dipag-fachrichtung"
+- extension Fachrichtung: url="https://gematik.de/fhir/dipag/StructureDefinition/dipag-fachrichtung" (Auswahl aus Fachrichtungliste unten)
   valueCoding.system="http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen"
 - extension Behandlungszeitraum: url="http://hl7.org/fhir/5.0/StructureDefinition/extension-Invoice.period[x]"
   valuePeriod.start + valuePeriod.end (aus den ChargeItem-Daten ableiten)
@@ -86,18 +86,19 @@ Das Bundle hat type="collection" und enthält folgende Ressourcen in dieser Reih
   sub-extension "Faktor" > sub-extension "Value" > valueDecimal: Steigerungsfaktor
 - extension[2] Behandlungsdatum: url="https://gematik.de/fhir/dipag/StructureDefinition/DiPagRechnungspositionBehandlungsdatum"
   valueDate: Datum der Leistung (YYYY-MM-DD)
-- code.coding[0].system: "http://fhir.de/CodeSystem/bäk/goä" (oder http://fhir.de/CodeSystem/bäk/gzä bei Zahnarztrechnungen)
+- code.coding[0].system: "http://fhir.de/CodeSystem/bäk/goä" (oder http://fhir.de/CodeSystem/bäk/gzä bei Zahnarztrechnungen GOZ verwenden)
 - code.coding[0].code: GOÄ oder GOZ-Ziffer (String, z.B. "1", "5", "3501")
 - code.text: Leistungsbeschreibung
 - quantity.value: Anzahl (meist 1), quantity.unit: "Anzahl", quantity.system: "http://unitsofmeasure.org", quantity.code: "{count}"
 - subject.reference: "Patient/{uuid}"
 - performer[0].actor.reference: "Practitioner/{uuid}"
 - occurrencePeriod.start + occurrencePeriod.end: Behandlungsdatum (start = end = Datum der Leistung)
+- bodysite: wenn anwendbar, z.B. für Zahn-Nummern, immer die Extension https://gematik.de/fhir/dipag/StructureDefinition/dipag-zahnregion nutzen
 
 ## Fachrichtungs-Codes (Auswahl)
-ALLG=Allgemeinmedizin, INNE=Innere Medizin, CHIR=Chirurgie, DERM=Dermatologie,
-GYNA=Gynäkologie, NEUR=Neurologie, ORTH=Orthopädie, PSYC=Psychiatrie,
-RADI=Radiologie, UROL=Urologie, OPHTH=Augenheilkunde, HNO=HNO, PAED=Pädiatrie
+ALLG=Allgemeinmedizin, INNE=Innere Medizin, CHIR=Chirurgie, HAUT=Dermatologie,
+FRAU=Gynäkologie, NEUR=Neurologie, ORTH=Orthopädie, PSYC=Psychiatrie,
+RADI=Radiologie, UROL=Urologie, AUGE=Augenheilkunde, HNOH=HNO, MZKH=Zahnmedizin
 
 ## Fehlende Daten
 - Fehlende optionale Felder: weglassen (nicht null)

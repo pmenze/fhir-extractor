@@ -186,6 +186,7 @@
 
   .pdf-preview {
     display: none;
+    position: relative;
     margin-top: 14px;
     border-radius: 8px;
     overflow: hidden;
@@ -198,6 +199,56 @@
     width: 100%;
     height: 100%;
     border: none;
+  }
+
+  .scan-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 10;
+    background: rgba(13, 15, 20, 0.35);
+  }
+
+  .scan-overlay.active {
+    display: block;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(79,255,176,0.4) 20%,
+      rgba(79,255,176,1) 50%,
+      rgba(79,255,176,0.4) 80%,
+      transparent 100%
+    );
+    box-shadow:
+      0 0 6px 1px rgba(79,255,176,0.8),
+      0 0 20px 4px rgba(79,255,176,0.3);
+    animation: scan 2.2s ease-in-out infinite;
+  }
+
+  .scan-line::before {
+    content: '';
+    position: absolute;
+    inset: -8px 0;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(79,255,176,0.06) 50%,
+      transparent 100%
+    );
+  }
+
+  @keyframes scan {
+    0%   { top: 4%; }
+    50%  { top: 94%; }
+    100% { top: 4%; }
   }
 
   .file-info {
@@ -590,6 +641,9 @@
           </div>
           <div class="pdf-preview" id="pdfPreview">
             <iframe id="pdfFrame"></iframe>
+            <div class="scan-overlay" id="scanOverlay">
+              <div class="scan-line"></div>
+            </div>
           </div>
           <div class="file-info" id="fileInfo" style="display:none">
             <span>📋</span>
@@ -691,6 +745,7 @@
       <div class="download-bar" id="downloadBar">
         <button class="btn-download" onclick="downloadBundle()">↓ Bundle herunterladen</button>
         <button class="btn-copy" onclick="copyBundle()">⎘ JSON kopieren</button>
+        <button class="btn-copy" id="btnBase64" onclick="copyBase64()">⎘ Base64 kopieren</button>
         <div class="total-display">
           <span style="color:var(--muted);font-size:11px">Gesamt</span>
           <span class="amount" id="totalAmount">–</span>
@@ -751,6 +806,7 @@ async function runExtraction() {
   const model  = document.getElementById('model').value;
 
   setStatus('loading', '⚙ Claude analysiert die Rechnung...');
+  document.getElementById('scanOverlay').classList.add('active');
   document.getElementById('extractBtn').disabled = true;
   document.getElementById('tabs').style.display = 'none';
   document.getElementById('bundleOverview').classList.remove('visible');
@@ -806,6 +862,7 @@ async function runExtraction() {
     document.getElementById('emptyState').style.display = 'flex';
   }
 
+  document.getElementById('scanOverlay').classList.remove('active');
   document.getElementById('extractBtn').disabled = false;
 }
 
@@ -1030,6 +1087,17 @@ function copyBundle() {
       const btn = document.querySelector('.btn-copy');
       btn.textContent = '✓ Kopiert';
       setTimeout(() => btn.textContent = '⎘ JSON kopieren', 2000);
+    });
+}
+
+function copyBase64() {
+  if (!currentBundle) return;
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(currentBundle))));
+  navigator.clipboard.writeText(b64)
+    .then(() => {
+      const btn = document.getElementById('btnBase64');
+      btn.textContent = '✓ Kopiert';
+      setTimeout(() => btn.textContent = '⎘ Base64 kopieren', 2000);
     });
 }
 
