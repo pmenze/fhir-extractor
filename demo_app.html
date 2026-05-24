@@ -620,6 +620,9 @@
   .inv-payment { color: var(--accent2); font-size: 12px; margin-bottom: 4px; }
   .inv-note { color: var(--muted); font-size: 11px; }
 
+  /* Field checks */
+  .chk-found { color: var(--accent) !important; }
+
   .resource-section {
     margin-bottom: 16px;
     border: 1px solid var(--border);
@@ -829,16 +832,18 @@
         </div>
         <div class="panel-body" style="font-size:11px; color:var(--muted); line-height:2">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px">
-            <span>✓ Patient & KVID</span>
-            <span>✓ GOÄ/GOZ-Ziffern</span>
-            <span>✓ Practitioner</span>
-            <span>✓ Steigerungsfaktoren</span>
-            <span>✓ Organisation</span>
-            <span>✓ Behandlungsdaten</span>
-            <span>✓ Rechnungs-Nr.</span>
-            <span>✓ Diagnosen</span>
-            <span>✓ Zahlungsziel</span>
-            <span>✓ Gesamtbeträge</span>
+            <span id="chk-patient">○ Patient</span>
+            <span id="chk-goae">○ GOÄ-Ziffern</span>
+            <span id="chk-kvid">○ KVID</span>
+            <span id="chk-goz">○ GOZ-Ziffern</span>
+            <span id="chk-practitioner">○ Practitioner</span>
+            <span id="chk-faktoren">○ Steigerungsfaktoren</span>
+            <span id="chk-organisation">○ Organisation</span>
+            <span id="chk-behandlung">○ Behandlungsdaten</span>
+            <span id="chk-rechnungsnr">○ Rechnungs-Nr.</span>
+            <span id="chk-diagnosen">○ Diagnosen</span>
+            <span id="chk-zahlungsziel">○ Zahlungsziel</span>
+            <span id="chk-betraege">○ Gesamtbeträge</span>
           </div>
         </div>
       </div>
@@ -949,6 +954,7 @@ async function runExtraction() {
   // const apiKey = document.getElementById('apiKey').value.trim();
   const model  = document.getElementById('model').value;
 
+  resetFieldChecks();
   setStatus('loading', '⚙ Claude analysiert die Rechnung...');
   document.getElementById('scanOverlay').classList.add('active');
   document.getElementById('extractBtn').disabled = true;
@@ -1057,6 +1063,69 @@ function renderResults(bundle) {
 
   // Rendered invoice view
   renderInvoice(entries);
+
+  // Field check indicators
+  updateFieldChecks(entries, invoice);
+}
+
+const CHK_LABELS = {
+  'chk-patient':      'Patient',
+  'chk-goae':         'GOÄ-Ziffern',
+  'chk-kvid':         'KVID',
+  'chk-goz':          'GOZ-Ziffern',
+  'chk-practitioner': 'Practitioner',
+  'chk-faktoren':     'Steigerungsfaktoren',
+  'chk-organisation': 'Organisation',
+  'chk-behandlung':   'Behandlungsdaten',
+  'chk-rechnungsnr':  'Rechnungs-Nr.',
+  'chk-diagnosen':    'Diagnosen',
+  'chk-zahlungsziel': 'Zahlungsziel',
+  'chk-betraege':     'Gesamtbeträge',
+};
+
+function setChk(id, found) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('chk-found', !!found);
+  el.textContent = (found ? '✓' : '○') + ' ' + CHK_LABELS[id];
+}
+
+function resetFieldChecks() {
+  Object.keys(CHK_LABELS).forEach(id => setChk(id, false));
+}
+
+function updateFieldChecks(entries, inv) {
+  const pat     = entries.find(e => e.resource?.resourceType === 'Patient')?.resource;
+  const prac    = entries.find(e => e.resource?.resourceType === 'Practitioner')?.resource;
+  const org     = entries.find(e => e.resource?.resourceType === 'Organization')?.resource;
+  const charges = entries.filter(e => e.resource?.resourceType === 'ChargeItem').map(e => e.resource);
+
+  const kvid = pat?.identifier?.find(i => i.system?.includes('kvid'))?.value;
+
+  const hasGoae = charges.some(ci => getAbrechnungsart(ci) === 'GOÄ');
+  const hasGoz  = charges.some(ci => getAbrechnungsart(ci) === 'GOZ');
+
+  const hasFaktor = charges.some(ci =>
+    ci.extension?.find(e => e.url.includes('go-angaben'))
+      ?.extension?.find(e => e.url === 'Faktor')
+      ?.extension?.find(e => e.url === 'Value')?.valueDecimal != null
+  );
+  const hasBehandlung = charges.some(ci =>
+    ci.extension?.find(e => e.url.includes('Behandlungsdatum'))?.valueDate
+  );
+
+  setChk('chk-patient',      !!pat);
+  setChk('chk-kvid',         !!kvid);
+  setChk('chk-goae',         hasGoae);
+  setChk('chk-goz',          hasGoz);
+  setChk('chk-practitioner', !!prac);
+  setChk('chk-faktoren',     hasFaktor);
+  setChk('chk-organisation', !!org);
+  setChk('chk-behandlung',   hasBehandlung);
+  setChk('chk-rechnungsnr',  !!inv?.identifier?.[0]?.value);
+  setChk('chk-diagnosen',    !!inv?.extension?.find(e => e.url.includes('Diagnose'))?.valueString);
+  setChk('chk-zahlungsziel', !!inv?._paymentTerms?.extension?.find(e => e.url.includes('zahlungsziel'))?.valueDate);
+  setChk('chk-betraege',     inv?.totalGross?.value != null);
 }
 
 function renderStructured(entries, invoice) {
