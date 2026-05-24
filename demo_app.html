@@ -61,12 +61,19 @@
 
   /* Header */
   header {
-    padding: 36px 0 32px;
+    padding: 28px 0 24px;
     display: flex;
-    align-items: flex-end;
-    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
     border-bottom: 1px solid var(--border);
     margin-bottom: 32px;
+    gap: 24px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
 
   .logo-mark {
@@ -100,6 +107,14 @@
     color: var(--muted);
     font-size: 11px;
     margin-top: 5px;
+  }
+
+  .gematik-logo {
+    height: 36px;
+    width: auto;
+    flex-shrink: 0;
+    border-radius: 8px;
+    opacity: 0.9;
   }
 
   /* Two-column layout */
@@ -738,11 +753,13 @@
 <body>
 <div class="app">
   <header>
-    <div class="logo-mark">⚕</div>
-    <div>
-      <h1>DiPAG <span>FHIR</span> Konverter</h1>
-      <div class="subtitle">PDF Arztrechnung → gematik dipag-rechnungsbundle · powered by Claude</div>
+    <div class="header-left">
+      <div>
+        <h1>DiPAG <span>FHIR</span> Konverter</h1>
+        <div class="subtitle">PDF Arztrechnung → gematik dipag-rechnungsbundle</div>
+      </div>
     </div>
+    <img src="Gematik_Logo_Flag_With_Background.png" alt="gematik" class="gematik-logo">
   </header>
 
   <div class="layout">
