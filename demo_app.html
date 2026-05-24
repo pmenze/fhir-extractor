@@ -184,6 +184,22 @@
 
   .upload-label strong { color: var(--accent); }
 
+  .pdf-preview {
+    display: none;
+    margin-top: 14px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border2);
+    height: 340px;
+    background: #fff;
+  }
+
+  .pdf-preview iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
   .file-info {
     display: none;
     margin-top: 14px;
@@ -572,6 +588,9 @@
             <div class="upload-icon">📄</div>
             <div class="upload-label"><strong>PDF hochladen</strong><br>oder hier ablegen</div>
           </div>
+          <div class="pdf-preview" id="pdfPreview">
+            <iframe id="pdfFrame"></iframe>
+          </div>
           <div class="file-info" id="fileInfo" style="display:none">
             <span>📋</span>
             <span class="file-name" id="fileName">–</span>
@@ -619,7 +638,7 @@
         <div class="panel-body" style="font-size:11px; color:var(--muted); line-height:2">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px">
             <span>✓ Patient & KVID</span>
-            <span>✓ GOÄ-Ziffern</span>
+            <span>✓ GOÄ/GOZ-Ziffern</span>
             <span>✓ Practitioner</span>
             <span>✓ Steigerungsfaktoren</span>
             <span>✓ Organisation</span>
@@ -709,6 +728,9 @@ function handleFile(file) {
   document.getElementById('fileInfo').style.display = 'flex';
   document.getElementById('fileName').textContent = file.name;
   document.getElementById('fileSize').textContent = formatBytes(file.size);
+  const url = URL.createObjectURL(file);
+  document.getElementById('pdfFrame').src = url;
+  document.getElementById('pdfPreview').style.display = 'block';
   // document.getElementById('extractBtn').disabled = !document.getElementById('apiKey').value;
 }
 
@@ -872,6 +894,12 @@ function renderStructured(entries, invoice) {
   });
 }
 
+function getAbrechnungsart(res) {
+  const typeExt = res.extension?.find(e => e.url.includes('rechnungsposition-type'));
+  if (typeExt?.valueCoding?.code) return typeExt.valueCoding.code;
+  return (res.code?.coding?.[0]?.system || '').includes('gzä') ? 'GOZ' : 'GOÄ';
+}
+
 function getResourceSummary(res) {
   switch (res.resourceType) {
     case 'Invoice':
@@ -886,7 +914,7 @@ function getResourceSummary(res) {
       const code = res.code?.coding?.[0]?.code || '–';
       const text = res.code?.text || '–';
       const date = res.extension?.find(e => e.url.includes('Behandlungsdatum'))?.valueDate || '–';
-      return `GOÄ ${code} · ${text.substring(0, 30)} · ${date}`;
+      return `${getAbrechnungsart(res)} ${code} · ${text.substring(0, 30)} · ${date}`;
     }
     default: return res.id || '';
   }
@@ -938,7 +966,7 @@ function getResourceFields(res) {
       if (oaddr) add('Adresse', [oaddr.line?.[0], oaddr.postalCode, oaddr.city].filter(Boolean).join(', '));
       break;
     case 'ChargeItem':
-      add('GOÄ-Ziffer', res.code?.coding?.[0]?.code);
+      add(`${getAbrechnungsart(res)}-Ziffer`, res.code?.coding?.[0]?.code);
       add('Beschreibung', res.code?.text);
       add('Anzahl', res.quantity?.value);
       const faktor = res.extension?.find(e => e.url.includes('go-angaben'))
