@@ -20,7 +20,7 @@ from typing import Optional
 
 def _load_system_prompt() -> str:
     """Lädt den Prompt aus system_prompt.txt + example_bundle.json (relativ zur Skript-Datei)."""
-    base = Path(__file__).parent
+    base = Path(__file__).parent / "prompts"
     prompt_file = base / "system_prompt.txt"
     bundle_file = base / "example_bundle.json"
     template = prompt_file.read_text(encoding="utf-8")
