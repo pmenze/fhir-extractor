@@ -484,6 +484,127 @@
   /* Structured view */
   .structured-view { padding: 16px 18px; overflow: auto; max-height: 620px; }
 
+  /* Rendered invoice view */
+  .invoice-view { padding: 20px; overflow-y: auto; max-height: 620px; }
+
+  .inv-doc {
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+
+  .inv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    gap: 24px;
+  }
+
+  .inv-sender { line-height: 1.8; }
+  .inv-sender strong { color: var(--text); font-size: 13px; display: block; margin-bottom: 2px; }
+  .inv-sender span { color: var(--muted); display: block; font-size: 11px; }
+
+  .inv-meta { text-align: right; flex-shrink: 0; }
+  .inv-title {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .inv-meta-row { color: var(--muted); font-size: 11px; line-height: 1.9; }
+  .inv-meta-row span { color: var(--text); }
+
+  .inv-patient {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(79,255,176,0.02);
+  }
+  .inv-section-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 5px;
+  }
+  .inv-patient-name { color: var(--text); font-size: 13px; margin-bottom: 2px; }
+  .inv-patient-meta { color: var(--muted); font-size: 11px; line-height: 1.7; }
+
+  .inv-infobar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .inv-info-cell {
+    flex: 1;
+    padding: 12px 24px;
+    border-right: 1px solid var(--border);
+  }
+  .inv-info-cell:last-child { border-right: none; }
+  .inv-info-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .inv-info-value { color: var(--text); font-size: 12px; }
+
+  .inv-table-wrap { overflow-x: auto; }
+
+  .inv-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .inv-table th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border2);
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .inv-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+    font-size: 12px;
+  }
+  .inv-table tr:last-child td { border-bottom: none; }
+  .inv-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .inv-r { text-align: right; }
+  .inv-ziffer { color: var(--accent); font-size: 11px; white-space: nowrap; }
+  .inv-betrag { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .inv-totals {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border2);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    background: var(--surface2);
+  }
+  .inv-total-row { display: flex; gap: 20px; align-items: baseline; }
+  .inv-total-label { color: var(--muted); font-size: 11px; min-width: 90px; text-align: right; }
+  .inv-total-value { color: var(--text); font-size: 12px; min-width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+  .inv-total-grand .inv-total-label { color: var(--text); }
+  .inv-total-grand .inv-total-value { color: var(--accent); font-size: 15px; }
+
+  .inv-footer {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .inv-payment { color: var(--accent2); font-size: 12px; margin-bottom: 4px; }
+  .inv-note { color: var(--muted); font-size: 11px; }
+
   .resource-section {
     margin-bottom: 16px;
     border: 1px solid var(--border);
@@ -719,8 +840,9 @@
 
       <!-- Tabs -->
       <div class="tabs" id="tabs" style="display:none">
-        <div class="tab active" onclick="switchTab('structured')">Strukturiert</div>
-        <div class="tab" onclick="switchTab('json')">JSON</div>
+        <div class="tab active" data-tab="structured" onclick="switchTab('structured')">Strukturiert</div>
+        <div class="tab" data-tab="json" onclick="switchTab('json')">JSON</div>
+        <div class="tab" data-tab="rendered" onclick="switchTab('rendered')">Gerendert</div>
       </div>
 
       <!-- Empty state -->
@@ -739,6 +861,11 @@
         <div class="json-viewer">
           <pre id="jsonOutput"></pre>
         </div>
+      </div>
+
+      <!-- Rendered tab -->
+      <div class="tab-content" id="tab-rendered">
+        <div class="invoice-view" id="invoiceView"></div>
       </div>
 
       <!-- Download bar -->
@@ -814,6 +941,7 @@ async function runExtraction() {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('structuredView').innerHTML = '';
   document.getElementById('jsonOutput').innerHTML = '';
+  document.getElementById('invoiceView').innerHTML = '';
 
   try {
     const b64 = await fileToBase64(currentFile);
@@ -909,6 +1037,9 @@ function renderResults(bundle) {
 
   // Structured view
   renderStructured(entries, invoice);
+
+  // Rendered invoice view
+  renderInvoice(entries);
 }
 
 function renderStructured(entries, invoice) {
@@ -949,6 +1080,133 @@ function renderStructured(entries, invoice) {
     section.appendChild(body);
     container.appendChild(section);
   });
+}
+
+function renderInvoice(entries) {
+  const inv  = entries.find(e => e.resource?.resourceType === 'Invoice')?.resource;
+  const pat  = entries.find(e => e.resource?.resourceType === 'Patient')?.resource;
+  const prac = entries.find(e => e.resource?.resourceType === 'Practitioner')?.resource;
+  const org  = entries.find(e => e.resource?.resourceType === 'Organization')?.resource;
+  const charges = entries.filter(e => e.resource?.resourceType === 'ChargeItem').map(e => e.resource);
+
+  if (!inv) {
+    document.getElementById('invoiceView').innerHTML =
+      '<div style="padding:24px;color:var(--muted)">Keine Invoice-Ressource im Bundle gefunden.</div>';
+    return;
+  }
+
+  const fmtDate = d => {
+    if (!d) return '–';
+    const [y, m, day] = d.split('-');
+    return `${day}.${m}.${y}`;
+  };
+  const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmtAddr = a => a ? [a.line?.[0], [a.postalCode, a.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '–';
+
+  const art       = inv.type?.coding?.[0]?.code || '–';
+  const diagExt   = inv.extension?.find(e => e.url.includes('Diagnose'));
+  const periodExt = inv.extension?.find(e => e.url.includes('period'));
+  const frExt     = inv.extension?.find(e => e.url.includes('fachrichtung'));
+  const baExt     = inv.extension?.find(e => e.url.includes('behandlungsart'));
+  const zahlDatum = inv._paymentTerms?.extension?.find(e => e.url.includes('zahlungsziel'))?.valueDate;
+
+  // Map ChargeItem.id → lineItem amount
+  const liMap = {};
+  for (const li of (inv.lineItem || [])) {
+    const ref = li.chargeItemReference?.reference || '';
+    const id  = ref.includes('/') ? ref.split('/')[1] : ref;
+    if (id) liMap[id] = li.priceComponent?.[0]?.amount?.value;
+  }
+
+  // Sort charges by treatment date
+  const sorted = [...charges].sort((a, b) => {
+    const da = a.extension?.find(e => e.url.includes('Behandlungsdatum'))?.valueDate || '';
+    const db = b.extension?.find(e => e.url.includes('Behandlungsdatum'))?.valueDate || '';
+    return da.localeCompare(db);
+  });
+
+  const rows = sorted.map(ci => {
+    const date   = fmtDate(ci.extension?.find(e => e.url.includes('Behandlungsdatum'))?.valueDate);
+    const ziffer = esc(ci.code?.coding?.[0]?.code || '–');
+    const text   = esc(ci.code?.text || '–');
+    const anzahl = ci.quantity?.value ?? 1;
+    const faktor = ci.extension?.find(e => e.url.includes('go-angaben'))
+                     ?.extension?.find(e => e.url === 'Faktor')
+                     ?.extension?.find(e => e.url === 'Value')?.valueDecimal;
+    const betrag = liMap[ci.id];
+    return `<tr>
+      <td>${date}</td>
+      <td class="inv-ziffer">${ziffer}</td>
+      <td>${text}</td>
+      <td class="inv-r">${anzahl}</td>
+      <td class="inv-r">${faktor != null ? faktor : '–'}</td>
+      <td class="inv-r inv-betrag">${betrag != null ? betrag.toFixed(2) + ' €' : '–'}</td>
+    </tr>`;
+  }).join('');
+
+  const pracName = prac ? (prac.name?.[0]?.text || [prac.name?.[0]?.prefix?.[0], prac.name?.[0]?.given?.[0], prac.name?.[0]?.family].filter(Boolean).join(' ')) : '–';
+  const orgName  = org?.name || pracName;
+  const orgAddr  = fmtAddr(org?.address?.[0] || prac?.address?.[0]);
+
+  const patName  = pat?.name?.[0]?.text || '–';
+  const patAddr  = fmtAddr(pat?.address?.[0]);
+  const kvid     = pat?.identifier?.find(i => i.system?.includes('kvid'))?.value;
+  const patMeta  = [kvid ? `KVID: ${kvid}` : null, pat?.birthDate ? `Geb.: ${fmtDate(pat.birthDate)}` : null, pat?.gender].filter(Boolean).join(' · ');
+
+  document.getElementById('invoiceView').innerHTML = `
+  <div class="inv-doc">
+    <div class="inv-header">
+      <div class="inv-sender">
+        <strong>${esc(orgName)}</strong>
+        <span>${esc(orgAddr)}</span>
+        ${prac && org ? `<span style="margin-top:4px;display:block">${esc(pracName)}</span>` : ''}
+      </div>
+      <div class="inv-meta">
+        <div class="inv-title">Rechnung</div>
+        <div class="inv-meta-row">Nr. <span>${esc(inv.identifier?.[0]?.value || '–')}</span></div>
+        <div class="inv-meta-row">Datum <span>${fmtDate(inv.date)}</span></div>
+        <div class="inv-meta-row">Typ <span>${esc(art)}</span></div>
+      </div>
+    </div>
+
+    ${pat ? `
+    <div class="inv-patient">
+      <div class="inv-section-label">Rechnungsempfänger</div>
+      <div class="inv-patient-name">${esc(patName)}</div>
+      <div class="inv-patient-meta">${esc(patAddr)}${patMeta ? '<br>' + esc(patMeta) : ''}</div>
+    </div>` : ''}
+
+    <div class="inv-infobar">
+      ${diagExt?.valueString ? `<div class="inv-info-cell"><div class="inv-info-label">Diagnose</div><div class="inv-info-value">${esc(diagExt.valueString)}</div></div>` : ''}
+      ${periodExt?.valuePeriod ? `<div class="inv-info-cell"><div class="inv-info-label">Behandlungszeitraum</div><div class="inv-info-value">${fmtDate(periodExt.valuePeriod.start)} – ${fmtDate(periodExt.valuePeriod.end)}</div></div>` : ''}
+      ${frExt?.valueCoding ? `<div class="inv-info-cell"><div class="inv-info-label">Fachrichtung</div><div class="inv-info-value">${esc(frExt.valueCoding.display || frExt.valueCoding.code)}</div></div>` : ''}
+      ${baExt?.valueCoding ? `<div class="inv-info-cell"><div class="inv-info-label">Behandlungsart</div><div class="inv-info-value">${esc(baExt.valueCoding.display || baExt.valueCoding.code)}</div></div>` : ''}
+    </div>
+
+    <div class="inv-table-wrap">
+      <table class="inv-table">
+        <thead><tr>
+          <th>Datum</th>
+          <th>${esc(art)}-Nr.</th>
+          <th>Leistung</th>
+          <th class="inv-r">Anz.</th>
+          <th class="inv-r">Faktor</th>
+          <th class="inv-r">Betrag</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">Keine Positionen</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div class="inv-totals">
+      ${inv.totalNet?.value != null ? `<div class="inv-total-row"><span class="inv-total-label">Netto</span><span class="inv-total-value">${inv.totalNet.value.toFixed(2)} €</span></div>` : ''}
+      <div class="inv-total-row inv-total-grand"><span class="inv-total-label">Gesamtbetrag</span><span class="inv-total-value">${inv.totalGross?.value != null ? inv.totalGross.value.toFixed(2) + ' €' : '–'}</span></div>
+    </div>
+
+    <div class="inv-footer">
+      ${(zahlDatum || inv.paymentTerms) ? `<div class="inv-payment">${esc(inv.paymentTerms || ('Zahlbar bis ' + fmtDate(zahlDatum)))}</div>` : ''}
+      ${inv.note?.[0]?.text ? `<div class="inv-note">${esc(inv.note[0].text)}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function getAbrechnungsart(res) {
@@ -1056,9 +1314,7 @@ function syntaxHighlight(json) {
 }
 
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', ['structured','json'][i] === name);
-  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
 }
