@@ -740,7 +740,9 @@ async function runExtraction() {
   try {
     const b64 = await fileToBase64(currentFile);
 
-    const systemPrompt = buildSystemPrompt();
+    const promptRes = await fetch('http://localhost:8787/prompt');
+    if (!promptRes.ok) throw new Error('Prompt konnte nicht vom Proxy geladen werden');
+    const systemPrompt = await promptRes.text();
 
     // const response = await fetch('https://api.anthropic.com/v1/messages', {
     const response = await fetch('http://localhost:8787/v1/messages', {
@@ -1003,31 +1005,6 @@ function copyBundle() {
     });
 }
 
-// System prompt (same as Python version)
-function buildSystemPrompt() {
-  return `Du bist ein spezialisierter FHIR R4 Konverter für das DiPAG-Profil (Digitale Patientenakte Gematik).
-Deine Aufgabe: Extrahiere alle Rechnungsdaten aus dem PDF und erzeuge ein valides FHIR R4 Bundle.
-
-Antworte NUR mit einem einzigen validen JSON-Objekt. Kein Markdown, keine Backticks, keine Erklärungen davor oder danach.
-
-Bundle-Struktur:
-- resourceType: "Bundle", type: "collection"
-- meta.profile: ["https://gematik.de/fhir/dipag/StructureDefinition/dipag-rechnungsbundle"]
-- entry: [Invoice, Patient, Practitioner, Organization, ...ChargeItems]
-- Alle fullUrl als "urn:uuid:{neue-uuid}"
-
-Für jeden Ressourcentyp:
-- Invoice: meta.profile dipag-rechnung, status "issued", identifier mit type.coding code "invoice", alle Extensions (behandlungsart AMB/IMP, fachrichtung, period, DiagnoseFreitext), participant (leistungserbringer, forderungsinhaber), lineItems, totalNet, totalGross, paymentTerms mit zahlungsziel-Extension
-- Patient: meta.profile dipag-patient, name official, birthDate, gender, address mit iso21090-Extensions, KVID-identifier
-- Practitioner: meta.profile dipag-person, name mit AC-qualifier-prefix-Extension, address, qualification
-- Organization: meta.profile dipag-institution, name, address
-- ChargeItem: meta.profile dipag-rechnungsposition, status "billable", Extensions (type GOÄ, go-angaben mit Faktor>Value, Behandlungsdatum), code mit GOÄ-Ziffer (system "http://fhir.de/CodeSystem/bäk/goä"), quantity, subject, performer, occurrencePeriod
-
-Fachrichtungs-CodeSystem: http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen
-Steigerungsfaktor-Struktur: extension[go-angaben] > extension[Faktor] > extension[Value] > valueDecimal
-
-Fehlende Daten: optionale Felder weglassen.`;
-}
 </script>
 </body>
 </html>
