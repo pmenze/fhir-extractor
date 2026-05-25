@@ -984,6 +984,7 @@ async function runExtraction() {
       body: JSON.stringify({
         model: model,
         max_tokens: 8192,
+        cache_control: { type: "ephemeral" },
         system: systemPrompt,
         messages: [{
           role: 'user',

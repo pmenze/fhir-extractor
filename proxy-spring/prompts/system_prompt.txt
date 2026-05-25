@@ -36,6 +36,8 @@ Das Bundle hat type="collection" und enthält folgende Ressourcen in dieser Reih
   valueCoding.system="http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen"
 - extension Behandlungszeitraum: url="http://hl7.org/fhir/5.0/StructureDefinition/extension-Invoice.period[x]"
   valuePeriod.start + valuePeriod.end (aus den ChargeItem-Daten ableiten)
+- extension DiPagAbrechnungsDiagnoseProzedurFreitext: url="https://gematik.de/fhir/dipag/StructureDefinition/DiPagAbrechnungsDiagnoseProzedur"
+  valueString nur befüllen wenn auf der Rechnung explizit eine Diagnose angegeben wurde, sonst weglassen.
 - participant[leistungserbringer].actor.reference: "Practitioner/{uuid}"
 - participant[forderungsinhaber].actor.reference: "Organization/{uuid}"
 - subject.reference: "Patient/{uuid}"
