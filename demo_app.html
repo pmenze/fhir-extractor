@@ -751,6 +751,46 @@
     .layout { grid-template-columns: 1fr; }
     .result-panel { min-height: 400px; }
   }
+
+  /* Validation status icons on resource badges */
+  .badge-val-status { margin-left: 6px; font-size: 12px; line-height: 1; }
+
+  /* Validation tab content */
+  .validation-view { padding: 16px 18px; overflow: auto; max-height: 620px; }
+
+  .val-summary {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 16px; padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px;
+  }
+
+  .val-count {
+    padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 500;
+  }
+  .val-count-err  { background: rgba(255,107,107,0.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.25); }
+  .val-count-warn { background: rgba(255,209,102,0.12); color: #ffd166; border: 1px solid rgba(255,209,102,0.2); }
+  .val-count-info { background: rgba(0,207,255,0.08);   color: #00cfff; border: 1px solid rgba(0,207,255,0.15); }
+  .val-count-ok   { background: rgba(79,255,176,0.08);  color: #4fffb0; border: 1px solid rgba(79,255,176,0.2); }
+
+  .val-issue {
+    margin-bottom: 8px; padding: 10px 14px;
+    border-radius: 8px; border: 1px solid var(--border);
+    font-size: 12px; line-height: 1.6;
+  }
+  .val-issue-error       { border-color: rgba(255,107,107,0.3);  background: rgba(255,107,107,0.04); }
+  .val-issue-warning     { border-color: rgba(255,209,102,0.25); background: rgba(255,209,102,0.04); }
+  .val-issue-information { border-color: rgba(0,207,255,0.2);    background: rgba(0,207,255,0.03); }
+
+  .val-issue-row { display: flex; align-items: flex-start; gap: 10px; }
+  .val-sev {
+    flex-shrink: 0; padding: 2px 7px; border-radius: 4px; margin-top: 1px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .val-sev-error       { background: rgba(255,107,107,0.2);  color: #ff6b6b; }
+  .val-sev-warning     { background: rgba(255,209,102,0.2);  color: #ffd166; }
+  .val-sev-information { background: rgba(0,207,255,0.15);   color: #00cfff; }
+  .val-msg { color: var(--text); flex: 1; }
+  .val-loc { color: var(--muted); font-size: 11px; margin-top: 4px; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -853,11 +893,11 @@
     <div class="panel result-panel" id="resultPanel">
       <!-- Bundle overview badges -->
       <div class="bundle-overview" id="bundleOverview">
-        <div class="resource-badge badge-invoice"><span class="count" id="cntInvoice">0</span> Invoice</div>
-        <div class="resource-badge badge-patient"><span class="count" id="cntPatient">0</span> Patient</div>
-        <div class="resource-badge badge-pract"><span class="count" id="cntPract">0</span> Practitioner</div>
-        <div class="resource-badge badge-org"><span class="count" id="cntOrg">0</span> Organization</div>
-        <div class="resource-badge badge-charge"><span class="count" id="cntCharge">0</span> ChargeItems</div>
+        <div class="resource-badge badge-invoice"><span class="count" id="cntInvoice">0</span> Invoice<span class="badge-val-status" id="val-Invoice"></span></div>
+        <div class="resource-badge badge-patient"><span class="count" id="cntPatient">0</span> Patient<span class="badge-val-status" id="val-Patient"></span></div>
+        <div class="resource-badge badge-pract"><span class="count" id="cntPract">0</span> Practitioner<span class="badge-val-status" id="val-Practitioner"></span></div>
+        <div class="resource-badge badge-org"><span class="count" id="cntOrg">0</span> Organization<span class="badge-val-status" id="val-Organization"></span></div>
+        <div class="resource-badge badge-charge"><span class="count" id="cntCharge">0</span> ChargeItems<span class="badge-val-status" id="val-ChargeItem"></span></div>
       </div>
 
       <!-- Tabs -->
@@ -865,6 +905,7 @@
         <div class="tab active" data-tab="structured" onclick="switchTab('structured')">Strukturiert</div>
         <div class="tab" data-tab="json" onclick="switchTab('json')">JSON</div>
         <div class="tab" data-tab="rendered" onclick="switchTab('rendered')">Gerendert</div>
+        <div class="tab" data-tab="validation" id="tabValidation" onclick="switchTab('validation')">Validierung</div>
       </div>
 
       <!-- Empty state -->
@@ -890,11 +931,17 @@
         <div class="invoice-view" id="invoiceView"></div>
       </div>
 
+      <!-- Validation tab -->
+      <div class="tab-content" id="tab-validation">
+        <div class="validation-view" id="validationView"></div>
+      </div>
+
       <!-- Download bar -->
       <div class="download-bar" id="downloadBar">
         <button class="btn-download" onclick="downloadBundle()">↓ Bundle herunterladen</button>
         <button class="btn-copy" onclick="copyBundle()">⎘ JSON kopieren</button>
         <button class="btn-copy" id="btnBase64" onclick="copyBase64()">⎘ Base64 kopieren</button>
+        <button class="btn-copy" onclick="if(currentBundle) runValidation(currentBundle)">↻ Validieren</button>
         <div class="total-display">
           <span style="color:var(--muted);font-size:11px">Gesamt</span>
           <span class="amount" id="totalAmount">–</span>
@@ -908,6 +955,11 @@
 <script>
 let currentBundle = null;
 let currentFile = null;
+let currentValidation = null;
+
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 // File handling
 const pdfInput = document.getElementById('pdfInput');
@@ -965,6 +1017,12 @@ async function runExtraction() {
   document.getElementById('structuredView').innerHTML = '';
   document.getElementById('jsonOutput').innerHTML = '';
   document.getElementById('invoiceView').innerHTML = '';
+  document.getElementById('validationView').innerHTML = '';
+  document.getElementById('tabValidation').textContent = 'Validierung';
+  ['Invoice','Patient','Practitioner','Organization','ChargeItem'].forEach(t => {
+    const el = document.getElementById(`val-${t}`);
+    if (el) el.textContent = '';
+  });
 
   try {
     const b64 = await fileToBase64(currentFile);
@@ -1008,6 +1066,7 @@ async function runExtraction() {
     currentBundle = bundle;
     renderResults(bundle);
     setStatus('success', `✓ Bundle erfolgreich extrahiert · ${bundle.entry?.length || 0} Ressourcen`);
+    runValidation(bundle);
 
   } catch (err) {
     setStatus('error', `✗ Fehler: ${err.message}`);
@@ -1442,6 +1501,112 @@ function copyBase64() {
       btn.textContent = '✓ Kopiert';
       setTimeout(() => btn.textContent = '⎘ Base64 kopieren', 2000);
     });
+}
+
+// ── Validation ───────────────────────────────────────────────────────────────
+
+async function runValidation(bundle) {
+  const tab = document.getElementById('tabValidation');
+  tab.innerHTML = 'Validierung <span class="spinner" style="display:inline-block;width:10px;height:10px;border-width:1.5px;vertical-align:middle;margin-left:4px"></span>';
+
+  document.getElementById('validationView').innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;padding:20px;color:var(--muted);font-size:12px">' +
+    '<div class="spinner"></div>Validierung läuft...</div>';
+
+  try {
+    const res = await fetch('http://localhost:8787/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bundle)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const outcome = await res.json();
+    currentValidation = outcome;
+    renderValidation(outcome);
+  } catch (err) {
+    tab.textContent = 'Validierung ✗';
+    tab.style.color = 'var(--accent3)';
+    document.getElementById('validationView').innerHTML =
+      `<div style="padding:20px;color:var(--accent3);font-size:12px">Validierung nicht verfügbar: ${esc(err.message)}</div>`;
+  }
+}
+
+function extractResourceType(loc) {
+  const m = loc?.match(/ofType\((\w+)\)/);
+  if (m) return m[1];
+  for (const rt of ['Invoice','Patient','Practitioner','Organization','ChargeItem']) {
+    if (loc?.includes(rt)) return rt;
+  }
+  return null;
+}
+
+function renderValidation(outcome) {
+  const issues = outcome.issue || [];
+  const tab = document.getElementById('tabValidation');
+
+  const errCount  = issues.filter(i => i.severity === 'error' || i.severity === 'fatal').length;
+  const warnCount = issues.filter(i => i.severity === 'warning').length;
+  const infoCount = issues.filter(i => i.severity === 'information').length;
+  const hasErrors = errCount > 0;
+
+  // Update tab label
+  tab.style.color = '';
+  if (hasErrors) {
+    tab.innerHTML = `<span style="color:var(--accent3)">Validierung ✗ (${errCount})</span>`;
+  } else {
+    tab.innerHTML = `<span style="color:var(--accent)">Validierung ✓</span>`;
+  }
+
+  // Group errors/warnings by resource type for badge icons
+  const typeHasError = {};
+  issues.forEach(issue => {
+    if (issue.severity !== 'error' && issue.severity !== 'fatal') return;
+    (issue.location || ['']).forEach(loc => {
+      const rt = extractResourceType(loc);
+      if (rt) typeHasError[rt] = true;
+    });
+  });
+
+  ['Invoice','Patient','Practitioner','Organization','ChargeItem'].forEach(rt => {
+    const el = document.getElementById(`val-${rt}`);
+    if (!el) return;
+    if (typeHasError[rt]) {
+      el.innerHTML = '<span style="color:#ff6b6b" title="Validierungsfehler">!</span>';
+    } else {
+      el.innerHTML = '<span style="color:#4fffb0">✓</span>';
+    }
+  });
+
+  // Summary bar
+  let summaryHtml = '<div class="val-summary">';
+  if (errCount  > 0) summaryHtml += `<span class="val-count val-count-err">${errCount} Fehler</span>`;
+  if (warnCount > 0) summaryHtml += `<span class="val-count val-count-warn">${warnCount} Warnungen</span>`;
+  if (infoCount > 0) summaryHtml += `<span class="val-count val-count-info">${infoCount} Hinweise</span>`;
+  if (!hasErrors && warnCount === 0) summaryHtml += `<span class="val-count val-count-ok">✓ Keine Fehler</span>`;
+  summaryHtml += '</div>';
+
+  // Issue list (errors + warnings first, info at end)
+  const sorted = [...issues].sort((a, b) => {
+    const rank = { fatal: 0, error: 1, warning: 2, information: 3 };
+    return (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9);
+  });
+
+  const issueHtml = sorted.map(issue => {
+    const sev    = issue.severity === 'fatal' ? 'error' : (issue.severity || 'information');
+    const msg    = issue.diagnostics || issue.details?.text || '–';
+    const locs   = (issue.location || []).join(', ');
+    return `<div class="val-issue val-issue-${sev}">
+      <div class="val-issue-row">
+        <span class="val-sev val-sev-${sev}">${issue.severity}</span>
+        <span class="val-msg">${esc(msg)}</span>
+      </div>
+      ${locs ? `<div class="val-loc">📍 ${esc(locs)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('validationView').innerHTML =
+    summaryHtml +
+    (issueHtml || '<div style="color:var(--muted);padding:12px 0;font-size:12px">Keine Issues gefunden.</div>');
 }
 
 </script>

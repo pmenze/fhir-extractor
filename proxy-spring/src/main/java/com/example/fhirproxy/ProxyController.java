@@ -1,6 +1,7 @@
 package com.example.fhirproxy;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,6 +29,9 @@ public class ProxyController {
     @Value("${ANTHROPIC_API_KEY:}")
     private String apiKey;
 
+    @Autowired
+    private FhirValidationService validationService;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @GetMapping("/prompt")
@@ -38,6 +42,15 @@ public class ProxyController {
         return ResponseEntity.ok()
                 .contentType(new MediaType("text", "plain", StandardCharsets.UTF_8))
                 .body(prompt);
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<String> validate(HttpServletRequest request) throws IOException {
+        byte[] body = request.getInputStream().readAllBytes();
+        String outcome = validationService.validate(new String(body, StandardCharsets.UTF_8));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(outcome);
     }
 
     @PostMapping("/**")

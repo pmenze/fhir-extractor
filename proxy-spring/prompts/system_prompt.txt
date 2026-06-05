@@ -43,7 +43,8 @@ Das Bundle hat type="collection" und enthält folgende Ressourcen in dieser Reih
 - subject.reference: "Patient/{uuid}"
 - issuer.reference: "Organization/{uuid}"
 - recipient.reference: "Patient/{uuid}"
-- recipient.identifier: GKV-KVID falls vorhanden (system: "http://fhir.de/sid/gkv/kvid-10")
+- recipient.identifier: GKV-KVID falls vorhanden (system: "http://fhir.de/sid/gkv/kvid-10"), sonst ABC123
+- recipient.display: Name des Patienten
 - date: Rechnungsdatum (YYYY-MM-DD)
 - lineItem[]: je ChargeItem eine Zeile:
   - sequence: 1, 2, 3, ...
