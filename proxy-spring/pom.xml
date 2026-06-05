@@ -37,6 +37,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- PDF → Image rendering for OpenAI-compatible APIs -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- HAPI FHIR R4 validation -->
         <!-- Pflicht: HAPI braucht eine explizite Caching-Implementierung -->
         <dependency>

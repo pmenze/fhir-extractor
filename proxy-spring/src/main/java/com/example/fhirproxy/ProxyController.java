@@ -1,6 +1,13 @@
 package com.example.fhirproxy;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -11,6 +18,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -20,18 +30,29 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
 
 @RestController
 public class ProxyController {
 
     private static final String ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+    private static final String INFOMANIAK_URL = "https://api.infomaniak.com/2/ai/%s/openai/v1/chat/completions";
 
     @Value("${ANTHROPIC_API_KEY:}")
-    private String apiKey;
+    private String anthropicApiKey;
+
+    @Value("${INFOMANIAK_API_KEY:}")
+    private String infomaniakApiKey;
+
+    @Value("${INFOMANIAK_PRODUCT_ID:}")
+    private String infomaniakProductId;
 
     @Autowired
     private FhirValidationService validationService;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @GetMapping("/prompt")
@@ -56,31 +77,175 @@ public class ProxyController {
     @PostMapping("/**")
     public ResponseEntity<StreamingResponseBody> proxy(HttpServletRequest request)
             throws IOException, InterruptedException {
-
         byte[] body = request.getInputStream().readAllBytes();
+        return isInfomaniakModel(extractModel(body))
+                ? proxyInfomaniak(body)
+                : proxyAnthropic(body);
+    }
 
+    // ── Anthropic ─────────────────────────────────────────────────────────────
+
+    private ResponseEntity<StreamingResponseBody> proxyAnthropic(byte[] body)
+            throws IOException, InterruptedException {
         HttpRequest upstream = HttpRequest.newBuilder()
                 .uri(URI.create(ANTHROPIC_URL))
-                .header("x-api-key", apiKey)
+                .header("x-api-key", anthropicApiKey)
                 .header("anthropic-version", "2023-06-01")
                 .header("content-type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                 .build();
 
         HttpResponse<InputStream> response = httpClient.send(upstream, HttpResponse.BodyHandlers.ofInputStream());
+        String contentType = response.headers().firstValue("content-type").orElse("application/json");
 
-        String contentType = response.headers()
-                .firstValue("content-type")
-                .orElse("application/json");
-
-        StreamingResponseBody streaming = outputStream -> {
-            try (InputStream in = response.body()) {
-                in.transferTo(outputStream);
-            }
+        StreamingResponseBody streaming = out -> {
+            try (InputStream in = response.body()) { in.transferTo(out); }
         };
 
         return ResponseEntity.status(response.statusCode())
                 .header(HttpHeaders.CONTENT_TYPE, contentType)
                 .body(streaming);
+    }
+
+    // ── Infomaniak ────────────────────────────────────────────────────────────
+
+    private ResponseEntity<StreamingResponseBody> proxyInfomaniak(byte[] anthropicBody)
+            throws IOException, InterruptedException {
+
+        if (infomaniakApiKey.isBlank() || infomaniakProductId.isBlank()) {
+            byte[] err = "{\"error\":{\"message\":\"INFOMANIAK_API_KEY or INFOMANIAK_PRODUCT_ID not configured\"}}".getBytes(StandardCharsets.UTF_8);
+            return ResponseEntity.status(500)
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                    .body(out -> out.write(err));
+        }
+
+        byte[] openaiBody = transformToOpenAI(anthropicBody);
+        String url = String.format(INFOMANIAK_URL, infomaniakProductId);
+
+        HttpRequest upstream = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + infomaniakApiKey)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(openaiBody))
+                .build();
+
+        HttpResponse<byte[]> response = httpClient.send(upstream, HttpResponse.BodyHandlers.ofByteArray());
+
+        byte[] responseBody = response.statusCode() == 200
+                ? transformFromOpenAI(response.body())
+                : response.body();
+
+        return ResponseEntity.status(response.statusCode())
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .body(out -> out.write(responseBody));
+    }
+
+    // ── Format transformation ─────────────────────────────────────────────────
+
+    private byte[] transformToOpenAI(byte[] anthropicBody) throws IOException {
+        JsonNode src = objectMapper.readTree(anthropicBody);
+        ObjectNode openai = objectMapper.createObjectNode();
+
+        openai.put("model", src.path("model").asText());
+        openai.put("max_tokens", src.path("max_tokens").asInt(4096));
+
+        ArrayNode messages = objectMapper.createArrayNode();
+
+        // System prompt → system message
+        String system = src.path("system").asText(null);
+        if (system != null && !system.isBlank()) {
+            ObjectNode sysMsg = objectMapper.createObjectNode();
+            sysMsg.put("role", "system");
+            sysMsg.put("content", system);
+            messages.add(sysMsg);
+        }
+
+        // User messages: document → image_url, text stays text
+        for (JsonNode msg : src.path("messages")) {
+            ObjectNode newMsg = objectMapper.createObjectNode();
+            newMsg.put("role", msg.path("role").asText());
+
+            JsonNode content = msg.path("content");
+            if (content.isArray()) {
+                ArrayNode newContent = objectMapper.createArrayNode();
+                for (JsonNode item : content) {
+                    switch (item.path("type").asText()) {
+                        case "document" -> {
+                            String data = item.path("source").path("data").asText();
+                            for (String pageB64 : pdfToBase64Images(data)) {
+                                ObjectNode imgItem = objectMapper.createObjectNode();
+                                imgItem.put("type", "image_url");
+                                ObjectNode imgUrl = objectMapper.createObjectNode();
+                                imgUrl.put("url", "data:image/png;base64," + pageB64);
+                                imgItem.set("image_url", imgUrl);
+                                newContent.add(imgItem);
+                            }
+                        }
+                        case "text" -> {
+                            ObjectNode textItem = objectMapper.createObjectNode();
+                            textItem.put("type", "text");
+                            textItem.put("text", item.path("text").asText());
+                            newContent.add(textItem);
+                        }
+                    }
+                }
+                newMsg.set("content", newContent);
+            } else {
+                newMsg.put("content", content.asText());
+            }
+            messages.add(newMsg);
+        }
+
+        openai.set("messages", messages);
+        return objectMapper.writeValueAsBytes(openai);
+    }
+
+    private byte[] transformFromOpenAI(byte[] openaiBody) throws IOException {
+        JsonNode src = objectMapper.readTree(openaiBody);
+
+        ObjectNode anthropic = objectMapper.createObjectNode();
+        anthropic.put("type", "message");
+        anthropic.put("role", "assistant");
+
+        String text = src.path("choices").path(0).path("message").path("content").asText("");
+        ArrayNode content = objectMapper.createArrayNode();
+        ObjectNode textBlock = objectMapper.createObjectNode();
+        textBlock.put("type", "text");
+        textBlock.put("text", text);
+        content.add(textBlock);
+        anthropic.set("content", content);
+        anthropic.put("stop_reason", "end_turn");
+
+        return objectMapper.writeValueAsBytes(anthropic);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private String extractModel(byte[] body) {
+        try {
+            return objectMapper.readTree(body).path("model").asText(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isInfomaniakModel(String model) {
+        return model != null && !model.startsWith("claude");
+    }
+
+    private List<String> pdfToBase64Images(String pdfBase64) throws IOException {
+        byte[] pdfBytes = Base64.getDecoder().decode(pdfBase64);
+        List<String> images = new ArrayList<>();
+        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
+            PDFRenderer renderer = new PDFRenderer(doc);
+            int pages = Math.min(doc.getNumberOfPages(), 10);
+            for (int i = 0; i < pages; i++) {
+                BufferedImage img = renderer.renderImageWithDPI(i, 150);
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                ImageIO.write(img, "PNG", bos);
+                images.add(Base64.getEncoder().encodeToString(bos.toByteArray()));
+            }
+        }
+        return images;
     }
 }

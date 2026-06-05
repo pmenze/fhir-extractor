@@ -843,8 +843,13 @@
             <div>
               <label>Modell</label>
               <select id="model">
-                <option value="claude-opus-4-7" selected>claude-opus-4-7 (empfohlen)</option>
-                <option value="claude-sonnet-4-6">claude-sonnet-4-6 (günstiger)</option>
+                <optgroup label="Anthropic (Claude)">
+                  <option value="claude-opus-4-7" selected>claude-opus-4-7 (empfohlen)</option>
+                  <option value="claude-sonnet-4-6">claude-sonnet-4-6 (günstiger)</option>
+                </optgroup>
+                <optgroup label="Infomaniak">
+                  <option value="google/gemma-4-31B-it">Gemma 4 · 31B Vision (Infomaniak)</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -1006,8 +1011,10 @@ async function runExtraction() {
   // const apiKey = document.getElementById('apiKey').value.trim();
   const model  = document.getElementById('model').value;
 
+  const startTime = Date.now();
+  const modelLabel = document.getElementById('model').selectedOptions[0].text;
   resetFieldChecks();
-  setStatus('loading', '⚙ Claude analysiert die Rechnung...');
+  setStatus('loading', `⚙ ${modelLabel} analysiert die Rechnung...`);
   document.getElementById('scanOverlay').classList.add('active');
   document.getElementById('extractBtn').disabled = true;
   document.getElementById('tabs').style.display = 'none';
@@ -1065,7 +1072,8 @@ async function runExtraction() {
 
     currentBundle = bundle;
     renderResults(bundle);
-    setStatus('success', `✓ Bundle erfolgreich extrahiert · ${bundle.entry?.length || 0} Ressourcen`);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    setStatus('success', `✓ Bundle erfolgreich extrahiert · ${bundle.entry?.length || 0} Ressourcen · ${elapsed} s`);
     runValidation(bundle);
 
   } catch (err) {
