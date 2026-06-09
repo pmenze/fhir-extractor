@@ -37,11 +37,11 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- PDF → Image rendering for OpenAI-compatible APIs -->
+        <!-- PDF → Markdown via Docling Serve -->
         <dependency>
-            <groupId>org.apache.pdfbox</groupId>
-            <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
+            <groupId>io.arconia</groupId>
+            <artifactId>arconia-docling-spring-boot-starter</artifactId>
+            <version>0.27.1</version>
         </dependency>
 
         <!-- HAPI FHIR R4 validation -->

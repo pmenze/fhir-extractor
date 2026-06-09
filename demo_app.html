@@ -1049,13 +1049,12 @@ async function runExtraction() {
       body: JSON.stringify({
         model: model,
         max_tokens: 8192,
-        cache_control: { type: "ephemeral" },
         system: systemPrompt,
         messages: [{
           role: 'user',
           content: [
             { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 }},
-            { type: 'text', text: 'Extrahiere alle Rechnungsdaten und erzeuge das DiPAG FHIR Bundle als reines JSON.' }
+            { type: 'text', text: 'Extrahiere alle Rechnungsdaten und erzeuge das DiPAG FHIR Bundle als reines JSON.', cache_control: { type: "ephemeral" } }
           ]
         }]
       })

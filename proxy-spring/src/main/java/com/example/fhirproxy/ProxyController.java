@@ -5,9 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -18,9 +15,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -30,9 +24,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
-import java.util.List;
 
 @RestController
 public class ProxyController {
@@ -51,6 +45,9 @@ public class ProxyController {
 
     @Autowired
     private FhirValidationService validationService;
+
+    @Autowired
+    private DoclingService doclingService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -74,13 +71,70 @@ public class ProxyController {
                 .body(outcome);
     }
 
+    private static final DateTimeFormatter TIMESTAMP_FMT =
+            DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+
     @PostMapping("/**")
     public ResponseEntity<StreamingResponseBody> proxy(HttpServletRequest request)
             throws IOException, InterruptedException {
         byte[] body = request.getInputStream().readAllBytes();
+        byte[] processedBody = replaceDocumentsWithMarkdown(body);
+        logPrompt(processedBody);
         return isInfomaniakModel(extractModel(body))
-                ? proxyInfomaniak(body)
-                : proxyAnthropic(body);
+                ? proxyInfomaniak(processedBody)
+                : proxyAnthropic(processedBody);
+    }
+
+    private void logPrompt(byte[] promptBody) {
+        String filename = "prompt_" + LocalDateTime.now().format(TIMESTAMP_FMT) + ".txt";
+        try {
+            Files.writeString(Path.of(filename),
+                    new String(promptBody, StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            // non-fatal – don't break the request if logging fails
+        }
+    }
+
+    // ── OCR pre-processing ────────────────────────────────────────────────────
+
+    private byte[] replaceDocumentsWithMarkdown(byte[] body) throws IOException {
+        JsonNode root = objectMapper.readTree(body);
+
+        boolean hasDocuments = false;
+        for (JsonNode msg : root.path("messages")) {
+            for (JsonNode item : msg.path("content")) {
+                if ("document".equals(item.path("type").asText())) {
+                    hasDocuments = true;
+                    break;
+                }
+            }
+        }
+        if (!hasDocuments) return body;
+
+        ObjectNode mutableRoot = root.deepCopy();
+        ArrayNode messages = (ArrayNode) mutableRoot.path("messages");
+        for (int i = 0; i < messages.size(); i++) {
+            ObjectNode msg = (ObjectNode) messages.get(i);
+            JsonNode content = msg.path("content");
+            if (!content.isArray()) continue;
+
+            ArrayNode newContent = objectMapper.createArrayNode();
+            for (JsonNode item : content) {
+                if ("document".equals(item.path("type").asText())) {
+                    byte[] pdfBytes = Base64.getDecoder().decode(
+                            item.path("source").path("data").asText());
+                    String markdown = doclingService.convertPdfToMarkdown(pdfBytes);
+                    ObjectNode textBlock = objectMapper.createObjectNode();
+                    textBlock.put("type", "text");
+                    textBlock.put("text", markdown);
+                    newContent.add(textBlock);
+                } else {
+                    newContent.add(item);
+                }
+            }
+            msg.set("content", newContent);
+        }
+        return objectMapper.writeValueAsBytes(mutableRoot);
     }
 
     // ── Anthropic ─────────────────────────────────────────────────────────────
@@ -151,7 +205,6 @@ public class ProxyController {
 
         ArrayNode messages = objectMapper.createArrayNode();
 
-        // System prompt → system message
         String system = src.path("system").asText(null);
         if (system != null && !system.isBlank()) {
             ObjectNode sysMsg = objectMapper.createObjectNode();
@@ -160,7 +213,6 @@ public class ProxyController {
             messages.add(sysMsg);
         }
 
-        // User messages: document → image_url, text stays text
         for (JsonNode msg : src.path("messages")) {
             ObjectNode newMsg = objectMapper.createObjectNode();
             newMsg.put("role", msg.path("role").asText());
@@ -169,24 +221,11 @@ public class ProxyController {
             if (content.isArray()) {
                 ArrayNode newContent = objectMapper.createArrayNode();
                 for (JsonNode item : content) {
-                    switch (item.path("type").asText()) {
-                        case "document" -> {
-                            String data = item.path("source").path("data").asText();
-                            for (String pageB64 : pdfToBase64Images(data)) {
-                                ObjectNode imgItem = objectMapper.createObjectNode();
-                                imgItem.put("type", "image_url");
-                                ObjectNode imgUrl = objectMapper.createObjectNode();
-                                imgUrl.put("url", "data:image/png;base64," + pageB64);
-                                imgItem.set("image_url", imgUrl);
-                                newContent.add(imgItem);
-                            }
-                        }
-                        case "text" -> {
-                            ObjectNode textItem = objectMapper.createObjectNode();
-                            textItem.put("type", "text");
-                            textItem.put("text", item.path("text").asText());
-                            newContent.add(textItem);
-                        }
+                    if ("text".equals(item.path("type").asText())) {
+                        ObjectNode textItem = objectMapper.createObjectNode();
+                        textItem.put("type", "text");
+                        textItem.put("text", item.path("text").asText());
+                        newContent.add(textItem);
                     }
                 }
                 newMsg.set("content", newContent);
@@ -231,21 +270,5 @@ public class ProxyController {
 
     private boolean isInfomaniakModel(String model) {
         return model != null && !model.startsWith("claude");
-    }
-
-    private List<String> pdfToBase64Images(String pdfBase64) throws IOException {
-        byte[] pdfBytes = Base64.getDecoder().decode(pdfBase64);
-        List<String> images = new ArrayList<>();
-        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
-            PDFRenderer renderer = new PDFRenderer(doc);
-            int pages = Math.min(doc.getNumberOfPages(), 10);
-            for (int i = 0; i < pages; i++) {
-                BufferedImage img = renderer.renderImageWithDPI(i, 150);
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                ImageIO.write(img, "PNG", bos);
-                images.add(Base64.getEncoder().encodeToString(bos.toByteArray()));
-            }
-        }
-        return images;
     }
 }
